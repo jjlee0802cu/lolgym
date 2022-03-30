@@ -356,7 +356,7 @@ def main(unused_argv):
     units = 1 # <= try changing this next...
     gamma = 0.99
     epochs = FLAGS.epochs # epochs = 50
-    batch_steps = 25
+    batch_steps = 100
     episode_steps = batch_steps
     experiment_name = "run_away"
     run_client = FLAGS.run_client
