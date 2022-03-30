@@ -222,10 +222,10 @@ class PPOAgent(object):
         print("PPOAgent:", self.agent_id, "Controller:", self.controller)
 
         env = gym.make("LoLGame-v0")
-        env.settings["map_name"] = "Old Summoners Rift"
+        env.settings["map_name"] = "Howling Abyss"
         env.settings["human_observer"] = run_client # Set to true to run league client
         env.settings["host"] = FLAGS.host # Set this using "hostname -i" ip on Linux
-        env.settings["players"] = "Ezreal.BLUE,Ezreal.PURPLE"
+        env.settings["players"] = "Udyr.BLUE,Udyr.PURPLE"
         env.settings["config_path"] = FLAGS.config_path
         env.settings["step_multiplier"] = FLAGS.step_multiplier
 
