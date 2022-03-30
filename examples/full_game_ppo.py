@@ -304,6 +304,20 @@ class PPOAgent(object):
                 raw_obs = obs
                 # print("RAW OBS:", raw_obs[0].observation["me_unit"])
                 obs = np.array(raw_obs[0].observation["enemy_unit"].distance_to_me)[None]
+
+                print("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+                print("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+                print(obs)
+                for i in range(len(raw_obs)):
+                    print(str(i), "th raw observation")
+                    print(raw_obs[i].observation.keys())
+                    print("my_id", raw_obs[i].observation['my_id'])
+                    print('me_unit', raw_obs[i].observation['me_unit'], type(raw_obs[i].observation['me_unit']))
+                    print('enemy_unit',raw_obs[i].observation['enemy_unit'], type(raw_obs[i].observation['enemy_unit']))
+                print("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+                print("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+
+
                 rews = []
                 steps = 0
                 while True:
