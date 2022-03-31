@@ -225,14 +225,18 @@ class PPOAgent(object):
         env.settings["map_name"] = "New Summoners Rift"
         env.settings["human_observer"] = run_client # Set to true to run league client
         env.settings["host"] = FLAGS.host # Set this using "hostname -i" ip on Linux
-        env.settings["players"] = "Udyr.BLUE,Udyr.PURPLE"
+        env.settings["players"] = "Ezreal.BLUE,Udyr.PURPLE"
         env.settings["config_path"] = FLAGS.config_path
         env.settings["step_multiplier"] = FLAGS.step_multiplier
 
         self.env = env
 
-    def convert_action(self, raw_obs, act):
+    def convert_action(self, raw_obs, act): #_______________________________________________________________________________________________________________________
         action_space = self.controller.action_space
+
+        print("awefaaw;eoifjao;weijfo;ajweiofjwoiejfoiwjefoijwefoijwefoiwefwefaw;eoifjao;weijfo;ajweiofjwoiejfoiwjefoijwefoijwefoiwefwefaw;eoifjao;weijfo;ajweiofjwoiejfoiwjefoijwefoijwefoiwefwef")
+        print("action_space", action_space)
+        print("action passed in:", act)
 
         act_x = 8 if act else 0
         act_y = 4
@@ -240,8 +244,9 @@ class PPOAgent(object):
                                     raw_obs[0].observation["me_unit"].position_y)
         act = [
             [1, point.Point(act_x, act_y)],
-            _NO_OP # _SPELL + [[0], target_pos]
+            _SPELL + [[0], target_pos]
         ]
+        print("action returned:", act)
 
         return act
 
@@ -255,7 +260,18 @@ class PPOAgent(object):
     def close(self):
         self.env.close()
 
-    def run(self, max_steps):
+    def create_obs_vector(self, raw_obs):
+        # creating a more comprehensive observation vector
+        arr = []
+        me_unit = raw_obs[0].observation['me_unit']
+        indices_to_omit = set([0,18,19,21,23,24,25])
+        for i in range(len(me_unit)):
+            if i not in indices_to_omit:
+                arr.append(me_unit[i])
+        arr = np.array(arr)[None].reshape(-1)
+        return arr
+
+    def run(self, max_steps):#_______________________________________________________________________________________________________________________
         obs = self.env.reset()
         
         # Spawning agents at Y = 7000 due to Google Colab camera centering where agent 1 spawns
@@ -263,7 +279,7 @@ class PPOAgent(object):
         self.env.teleport(1, point.Point(7100.0, 7000.0))
         self.env.teleport(2, point.Point(7500.0, 7000.0))
         raw_obs = obs
-        obs = np.array(raw_obs[0].observation["enemy_unit"].distance_to_me)[None]
+        obs = self.create_obs_vector(raw_obs)
         rews = []
         steps = 0
 
@@ -276,9 +292,9 @@ class PPOAgent(object):
 
             obs, rew, done, _ = self.env.step(act)
             raw_obs = obs
-            obs = np.array(raw_obs[0].observation["enemy_unit"].distance_to_me)[None]
+            obs = self.create_obs_vector(raw_obs)
             
-            rew = +(raw_obs[0].observation["enemy_unit"].distance_to_me / 1000.0)
+            rew = +(raw_obs[0].observation["me_unit"].current_gold)
 
             done = done[0]
             rews.append(rew)
@@ -288,7 +304,7 @@ class PPOAgent(object):
 
         print("Ran %d steps, got %f reward" % (len(rews), np.sum(rews)))
 
-    def train(self, epochs, batch_steps, episode_steps, experiment_name):
+    def train(self, epochs, batch_steps, episode_steps, experiment_name):#_______________________________________________________________________________________________________________________
         final_out = "" # Used to store outputs
 
         lll = []
@@ -302,21 +318,7 @@ class PPOAgent(object):
                 self.env.teleport(1, point.Point(7100.0, 7000.0))
                 self.env.teleport(2, point.Point(7500.0, 7000.0))
                 raw_obs = obs
-                # print("RAW OBS:", raw_obs[0].observation["me_unit"])
-                obs = np.array(raw_obs[0].observation["enemy_unit"].distance_to_me)[None]
-
-                print("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-                print("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-                print(obs)
-                for i in range(len(raw_obs)):
-                    print(str(i), "th raw observation")
-                    print(raw_obs[i].observation.keys())
-                    print("my_id", raw_obs[i].observation['my_id'])
-                    print('me_unit', raw_obs[i].observation['me_unit'], type(raw_obs[i].observation['me_unit']))
-                    print('enemy_unit',raw_obs[i].observation['enemy_unit'], type(raw_obs[i].observation['enemy_unit']))
-                print("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-                print("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-
+                obs = self.create_obs_vector(raw_obs)
 
                 rews = []
                 steps = 0
@@ -331,17 +333,36 @@ class PPOAgent(object):
                     # Save this state action pair
                     self.save_pair(obs, act)
 
+
+
+                    print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+                    print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+
+                    print(pred)
+                    print(act)
+
+
+
+
                     # Get action
                     act = self.convert_action(raw_obs, act)
+
+                    print(act)
+                    
+
+                    print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+                    print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+
 
                     # Take the action and save the reward
                     obs, rew, done, _ = self.env.step(act)
                     raw_obs = obs
-                    obs = np.array(raw_obs[0].observation["enemy_unit"].distance_to_me)[None]
+                    obs = self.create_obs_vector(raw_obs)
                     
                     # print(pred, act)
-                    rew = +(raw_obs[0].observation["enemy_unit"].distance_to_me / 1000.0)
-                    
+                    rew = (raw_obs[0].observation["me_unit"].current_gold) # replaces the rew computed by self.env.step() with a purely gold based reward
+                    print("reward:", rew)
+
                     done = done[0]
                     rews.append(rew)
 
@@ -370,13 +391,13 @@ def main(unused_argv):
     units = 1 # <= try changing this next...
     gamma = 0.99
     epochs = FLAGS.epochs # epochs = 50
-    batch_steps = 100
+    batch_steps = 200
     episode_steps = batch_steps
     experiment_name = "run_away"
     run_client = FLAGS.run_client
 
     # Declare observation space, action space and model controller
-    observation_space = Box(low=0, high=24000, shape=(1,), dtype=np.float32)
+    observation_space = Box(low=0, high=50000, shape=(29,), dtype=np.float32)
     action_space = Discrete(2)
     controller = Controller(units, gamma, observation_space, action_space)
     # controller = Controller(units, gamma, batch_steps, observation_space, action_space)
