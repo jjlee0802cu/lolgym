@@ -259,7 +259,6 @@ class PPOAgent(object):
         #
         #]
 
-        print("action returned:", act)
 
         return act
 
@@ -307,7 +306,7 @@ class PPOAgent(object):
             raw_obs = obs
             obs = self.create_obs_vector(raw_obs)
             
-            #rew = +(raw_obs[0].observation["me_unit"].current_gold) #____________________________________________________________________________UNCOMMENT IF YOU WNAT REW TO BE JUST GOLD
+            rew = (raw_obs[0].observation["me_unit"].current_gold) #____________________________________________________________________________UNCOMMENT IF YOU WNAT REW TO BE JUST GOLD
 
             done = done[0]
             rews.append(rew)
@@ -346,25 +345,13 @@ class PPOAgent(object):
                     # Save this state action pair
                     self.save_pair(obs, act)
 
-
-
                     print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-                    print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-
                     print(pred)
                     print(act)
 
-
-
-
                     # Get action
                     act = self.convert_action(raw_obs, act)
-
-                    print(act)
-                    
-
-                    print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-                    print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+                    print("action returned:", act)
 
 
                     # Take the action and save the reward
