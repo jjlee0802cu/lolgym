@@ -225,7 +225,7 @@ class PPOAgent(object):
         env.settings["map_name"] = "New Summoners Rift"
         env.settings["human_observer"] = run_client # Set to true to run league client
         env.settings["host"] = FLAGS.host # Set this using "hostname -i" ip on Linux
-        env.settings["players"] = "Ezreal.BLUE,Udyr.PURPLE"
+        env.settings["players"] = "Ezreal.BLUE,Garen.PURPLE"
         env.settings["config_path"] = FLAGS.config_path
         env.settings["step_multiplier"] = FLAGS.step_multiplier
 
@@ -240,12 +240,16 @@ class PPOAgent(object):
 
         act_x = 8 if act else 0
         act_y = 4
-        target_pos = point.Point(raw_obs[0].observation["me_unit"].position_x,
-                                    raw_obs[0].observation["me_unit"].position_y)
-        act = [
-            [1, point.Point(act_x, act_y)],
-            _SPELL + [[0], target_pos]
-        ]
+        target_pos = point.Point(raw_obs[0].observation["enemy_unit"].position_x,
+                                    raw_obs[0].observation["enemy_unit"].position_y)
+        
+        if act == 0:
+            act = [_NO_OP]
+        elif act == 1:
+            act = [[1, target_pos]]
+        else:
+            act = [_SPELL + [[0], target_pos], _SPELL + [[1], target_pos], _SPELL + [[2], target_pos], _SPELL + [[3], target_pos]]
+
         print("action returned:", act)
 
         return act
@@ -398,7 +402,7 @@ def main(unused_argv):
 
     # Declare observation space, action space and model controller
     observation_space = Box(low=0, high=50000, shape=(29,), dtype=np.float32)
-    action_space = Discrete(2)
+    action_space = Discrete(3)
     controller = Controller(units, gamma, observation_space, action_space)
     # controller = Controller(units, gamma, batch_steps, observation_space, action_space)
 
