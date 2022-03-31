@@ -234,21 +234,30 @@ class PPOAgent(object):
     def convert_action(self, raw_obs, act): #_______________________________________________________________________________________________________________________
         action_space = self.controller.action_space
 
-        print("awefaaw;eoifjao;weijfo;ajweiofjwoiejfoiwjefoijwefoijwefoiwefwefaw;eoifjao;weijfo;ajweiofjwoiejfoiwjefoijwefoijwefoiwefwefaw;eoifjao;weijfo;ajweiofjwoiejfoiwjefoijwefoijwefoiwefwef")
         print("action_space", action_space)
         print("action passed in:", act)
 
-        act_x = 8 if act else 0
-        act_y = 4
-        target_pos = point.Point(raw_obs[0].observation["enemy_unit"].position_x,
+        enemy_pos = point.Point(raw_obs[0].observation["enemy_unit"].position_x,
                                     raw_obs[0].observation["enemy_unit"].position_y)
         
         if act == 0:
-            act = [_NO_OP]
+            act = [[1, point.Point(8,4)]]
         elif act == 1:
-            act = [[1, target_pos]]
+            act = [[1, point.Point(0,4)]]
+        elif act == 2:
+            act = [[1, point.Point(4,8)]]
+        elif act == 3:
+            act = [[1, point.Point(4,0)]]
+        elif act == 4:
+            act = [_SPELL + [[0], enemy_pos], _SPELL + [[1], enemy_pos], _SPELL + [[2], enemy_pos], _SPELL + [[3], enemy_pos]]
         else:
-            act = [_SPELL + [[0], target_pos], _SPELL + [[1], target_pos], _SPELL + [[2], target_pos], _SPELL + [[3], target_pos]]
+            act = [_NO_OP]
+
+        #act = [
+        #    [1, point.Point(act_x, act_y)],
+        #    _SPELL + [[0], target_pos]
+        #
+        #]
 
         print("action returned:", act)
 
@@ -298,7 +307,7 @@ class PPOAgent(object):
             raw_obs = obs
             obs = self.create_obs_vector(raw_obs)
             
-            rew = +(raw_obs[0].observation["me_unit"].current_gold)
+            #rew = +(raw_obs[0].observation["me_unit"].current_gold) #____________________________________________________________________________UNCOMMENT IF YOU WNAT REW TO BE JUST GOLD
 
             done = done[0]
             rews.append(rew)
@@ -402,7 +411,7 @@ def main(unused_argv):
 
     # Declare observation space, action space and model controller
     observation_space = Box(low=0, high=50000, shape=(29,), dtype=np.float32)
-    action_space = Discrete(3)
+    action_space = Discrete(6)
     controller = Controller(units, gamma, observation_space, action_space)
     # controller = Controller(units, gamma, batch_steps, observation_space, action_space)
 
