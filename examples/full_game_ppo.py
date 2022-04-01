@@ -62,6 +62,8 @@ flags.DEFINE_integer("epochs", 50, "Number of episodes to run the experiment for
 flags.DEFINE_float("step_multiplier", 1.0, "Run game server x times faster than real-time")
 flags.DEFINE_bool("run_client", False, "Controls whether the game client is run or not")
 
+act_space_size = 8
+
 class Controller(object):
     def __init__(self,
                  units=1,
@@ -108,8 +110,8 @@ class Controller(object):
 
         # value function
         x = in1 = Input(observation_space.shape)
-        x = Dense(units, activation='elu')(x)
-        x = Dense(units, activation='elu')(x)
+        x = Dense(units+31, activation='elu')(x)
+        x = Dense(units+31, activation='elu')(x)
         x = Dense(1)(x)
         v = Model(in1, x)
 
@@ -127,7 +129,8 @@ class Controller(object):
 
         # policy function
         x = in_state = Input(observation_space.shape)
-        x = Dense(units, activation='elu')(x)
+        x = Dense(units+31, activation='elu')(x)
+        x = Dense(units+31, activation='elu')(x)
         x = Dense(units, activation='elu')(x)
         x = Dense(action_space.n)(x)
         action_dist = Lambda(lambda x: tf.nn.log_softmax(x, axis=-1))(x)
@@ -173,10 +176,10 @@ class Controller(object):
         self.d_agents += 1
 
         print("[FIT] FIT CHECK:", self.d_agents, self.n_agents)
-        print(X)
-        print(Y)
-        print(V)
-        print(P)
+        #print(X)
+        #print(Y)
+        #print(V)
+        #print(P)
 
         if self.d_agents < self.n_agents:
             return None, None
@@ -225,42 +228,64 @@ class PPOAgent(object):
         env.settings["map_name"] = "Old Summoners Rift"
         env.settings["human_observer"] = run_client # Set to true to run league client
         env.settings["host"] = FLAGS.host # Set this using "hostname -i" ip on Linux
-        env.settings["players"] = "Ezreal.BLUE,Garen.PURPLE"
+        env.settings["players"] = "Ezreal.BLUE,Ezreal.PURPLE" #"Ezreal.BLUE,Ezreal.PURPLE"
         env.settings["config_path"] = FLAGS.config_path
         env.settings["step_multiplier"] = FLAGS.step_multiplier
 
         self.env = env
 
+        self.old_me_kills = 0
+        self.old_enemy_kills = 0
+        self.old_me_hp_rat = 1
+        self.old_enemy_hp_rat = 1
+
     def convert_action(self, raw_obs, act): #_______________________________________________________________________________________________________________________
         action_space = self.controller.action_space
 
-        print("action_space", action_space)
-        print("action passed in:", act)
-
+        me_pos = point.Point(raw_obs[0].observation["me_unit"].position_x,
+                                    raw_obs[0].observation["me_unit"].position_y)
         enemy_pos = point.Point(raw_obs[0].observation["enemy_unit"].position_x,
                                     raw_obs[0].observation["enemy_unit"].position_y)
         
         if act == 0:
-            act = [[1, point.Point(8,4)]]
+            act = [1, point.Point(8,4)]
         elif act == 1:
-            act = [[1, point.Point(0,4)]]
+            act = [1, point.Point(0,4)]
         elif act == 2:
-            act = [[1, point.Point(4,8)]]
+            act = [1, point.Point(4,8)]
         elif act == 3:
-            act = [[1, point.Point(4,0)]]
-        elif act == 4:
-            act = [_SPELL + [[0], enemy_pos], _SPELL + [[1], enemy_pos], _SPELL + [[2], enemy_pos], _SPELL + [[3], enemy_pos]]
+            act = [1, point.Point(4,0)]
+        elif act == 4: #Q
+            act = _SPELL + [[0], enemy_pos] if 2 in raw_obs[0].observation["available_actions"] else _NO_OP
+        elif act == 5: #W
+            act = _SPELL + [[1], enemy_pos] if 2 in raw_obs[0].observation["available_actions"] else _NO_OP
+        elif act == 6: #R
+            act = _SPELL + [[3], enemy_pos] if 2 in raw_obs[0].observation["available_actions"] else _NO_OP
+        elif act == 7: #E1
+            act = _NO_OP
+        elif act == 8: #E2
+            act = _SPELL + [[2], point.Point(me_pos.x + 0, me_pos.y + 400)] if 2 in raw_obs[0].observation["available_actions"] else _NO_OP
+        elif act == 9: #E3
+            act = _SPELL + [[2], point.Point(me_pos.x + 400, me_pos.y + 800)] if 2 in raw_obs[0].observation["available_actions"] else _NO_OP
+        elif act == 10: #E4
+            act = _SPELL + [[2], point.Point(me_pos.x + 400, me_pos.y + 0)] if 2 in raw_obs[0].observation["available_actions"] else _NO_OP
         else:
-            act = [_NO_OP]
-
-        #act = [
-        #    [1, point.Point(act_x, act_y)],
-        #    _SPELL + [[0], target_pos]
-        #
-        #]
+            act = _SPELL + [[2], point.Point(me_pos.x + 800, me_pos.y + 400)] if 2 in raw_obs[0].observation["available_actions"] else _NO_OP
 
 
-        return act
+        enemy_action_possibilities = [
+            _SPELL + [[0], me_pos],
+            _SPELL + [[1], me_pos],
+            #_SPELL + [[2], point.Point(enemy_pos.x + 800, enemy_pos.y + 400)], 
+            #_SPELL + [[2], point.Point(enemy_pos.x + 0, enemy_pos.y + 400)], 
+            #_SPELL + [[2], point.Point(enemy_pos.x + 400, enemy_pos.y + 800)], 
+            #_SPELL + [[2], point.Point(enemy_pos.x + 400, enemy_pos.y + 0)], 
+            _SPELL + [[3], me_pos],
+            _NO_OP,_NO_OP,_NO_OP,_NO_OP#,_NO_OP,_NO_OP,_NO_OP
+        ]
+        actlist = [act, np.random.choice(enemy_action_possibilities)]
+        print("action list", actlist)
+        return actlist
 
     def save_pair(self, obs, act):
         action_space = self.controller.action_space
@@ -275,12 +300,23 @@ class PPOAgent(object):
     def create_obs_vector(self, raw_obs):
         # creating a more comprehensive observation vector
         arr = []
+
         me_unit = raw_obs[0].observation['me_unit']
-        indices_to_omit = set([0,18,19,21,23,24,25])
+        indices_to_omit = set([0,3,7,8,9,13,16,18,19,21,22,23,24,25])
         for i in range(len(me_unit)):
             if i not in indices_to_omit:
                 arr.append(me_unit[i])
-        arr = np.array(arr)[None].reshape(-1)
+
+        enemy_unit = raw_obs[0].observation['enemy_unit']
+        indices_to_omit = set([0,1,2,3,7,8,9,13,16,18,19,21,22])
+        for i in range(len(enemy_unit)):
+            if i not in indices_to_omit:
+                arr.append(enemy_unit[i])
+
+        arr = np.array(arr)[None].reshape(-1) / 100
+
+
+
         return arr
 
     def run(self, max_steps):#_______________________________________________________________________________________________________________________
@@ -298,7 +334,7 @@ class PPOAgent(object):
         while True:
             steps += 1
             pred, act = [x[0] for x in self.controller.pf(obs[None])]
-            act = np.argmax(pred)
+            #act = np.argmax(pred)
 
             act = self.convert_action(raw_obs, act)
 
@@ -306,7 +342,7 @@ class PPOAgent(object):
             raw_obs = obs
             obs = self.create_obs_vector(raw_obs)
             
-            rew = (raw_obs[0].observation["me_unit"].current_gold) #____________________________________________________________________________UNCOMMENT IF YOU WNAT REW TO BE JUST GOLD
+            #rew = (raw_obs[0].observation["me_unit"].current_gold) #____________________________________________________________________________UNCOMMENT IF YOU WNAT REW TO BE JUST GOLD
 
             done = done[0]
             rews.append(rew)
@@ -338,30 +374,61 @@ class PPOAgent(object):
                     steps += 1
 
                     # Prediction, action, save prediction
-                    print("[AGENT " + str(self.agent_id) + "]: obs[None] :=", obs[None])
+                    #print("[AGENT " + str(self.agent_id) + "]: obs[None] :=", obs[None])
                     pred, act = [x[0] for x in self.controller.pf(obs[None])]
                     self.controller.P.append(pred)
+
+
+                    # Add random pick with 1 - alpha * epochs prob
+                    probability = 1 - epoch/epochs
+                    probability = 0 if probability < 0 else probability
+                    if np.random.random_sample() < probability:
+                        act = np.random.choice(act_space_size)
+                    if steps < 3:
+                        act = 7 # set to no-op for first few steps so that it doesn't troll us when it lags bc of fitting
 
                     # Save this state action pair
                     self.save_pair(obs, act)
 
                     print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
                     print(pred)
-                    print(act)
 
                     # Get action
                     act = self.convert_action(raw_obs, act)
-                    print("action returned:", act)
-
 
                     # Take the action and save the reward
                     obs, rew, done, _ = self.env.step(act)
                     raw_obs = obs
                     obs = self.create_obs_vector(raw_obs)
                     
-                    # print(pred, act)
-                    rew = (raw_obs[0].observation["me_unit"].current_gold) # replaces the rew computed by self.env.step() with a purely gold based reward
+                    
+
+
+
+
+                    me_hp_rat  = raw_obs[0].observation["me_unit"].current_hp / raw_obs[0].observation["me_unit"].max_hp
+                    enemy_hp_rat  = raw_obs[0].observation["enemy_unit"].current_hp / raw_obs[0].observation["enemy_unit"].max_hp
+                    delta_me_rat = me_hp_rat - self.old_me_hp_rat
+                    delta_enemy_rat = enemy_hp_rat - self.old_enemy_hp_rat
+                    rew = delta_me_rat - delta_enemy_rat
+                    self.old_me_hp_rat = me_hp_rat
+                    self.old_enemy_hp_rat = enemy_hp_rat
+
+                    me_kills = raw_obs[0].observation["me_unit"].kill_count
+                    enemy_kills = raw_obs[0].observation["enemy_unit"].kill_count
+                    if me_kills > self.old_me_kills:
+                        rew = 20
+                    if enemy_kills > self.old_enemy_kills:
+                        rew = -20
+                    self.old_me_kills = me_kills
+                    self.old_enemy_kills = enemy_kills
+
                     print("reward:", rew)
+                    
+
+
+
+
 
                     done = done[0]
                     rews.append(rew)
@@ -397,8 +464,8 @@ def main(unused_argv):
     run_client = FLAGS.run_client
 
     # Declare observation space, action space and model controller
-    observation_space = Box(low=0, high=50000, shape=(29,), dtype=np.float32)
-    action_space = Discrete(6)
+    observation_space = Box(low=0, high=50000, shape=(45,), dtype=np.float32)
+    action_space = Discrete(act_space_size)
     controller = Controller(units, gamma, observation_space, action_space)
     # controller = Controller(units, gamma, batch_steps, observation_space, action_space)
 
