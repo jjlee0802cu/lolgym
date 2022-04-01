@@ -19,14 +19,12 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-"""Example of a basic full game environment implementing PPO."""
+"""Full game environment implementing PPO for a 1v1 game"""
 
 import uuid
-
 import random
 import time
 import numpy as np
-
 import tensorflow as tf
 import tensorflow.keras.backend as K
 from tensorflow.keras.models import Model, clone_model
@@ -39,7 +37,6 @@ import gym
 import lolgym.envs
 from pylol.lib import actions, features, point
 from pylol.lib import point
-
 from absl import flags
 FLAGS = flags.FLAGS
 
@@ -49,9 +46,7 @@ _SPELL = [actions.FUNCTIONS.spell.id]
 
 import gym
 from gym.spaces import Box, Tuple, Discrete, Dict, MultiDiscrete
-
 import matplotlib.pyplot as plt
-
 from absl import flags
 from absl import app
 
@@ -62,20 +57,15 @@ flags.DEFINE_integer("epochs", 50, "Number of episodes to run the experiment for
 flags.DEFINE_float("step_multiplier", 1.0, "Run game server x times faster than real-time")
 flags.DEFINE_bool("run_client", False, "Controls whether the game client is run or not")
 
+# Number of possible actions that PPO Agent can take
 act_space_size = 8
 
 class Controller(object):
     def __init__(self,
                  units=1,
                  gamma=0.99,
-                 #batch_steps=None,
                  observation_space=None,
                  action_space=None):
-        
-        """
-        if not batch_steps:
-            raise ValueError("Controller needs batch step count specified")
-        """
 
         self.units = units
         self.gamma = gamma
@@ -146,7 +136,7 @@ class Controller(object):
             # y_true is the action mask
             prob = tf.reduce_sum(y_true * y_pred, axis=-1)
             old_prob = tf.reduce_sum(y_true * in_old_prediction, axis=-1)
-            ratio = tf.exp(prob - old_prob)  # hehe, they are log probs, so we subtract
+            ratio = tf.exp(prob - old_prob)
             
             # this is the VPG objective
             #ll = -(prob * advantage)
@@ -185,7 +175,6 @@ class Controller(object):
             return None, None
 
         print("[FIT] TRAINING ON DATA")
-
         X, Y, V, P = [np.array(x) for x in [X, Y, V, P]]
 
         # Subtract value baseline to get advantage
@@ -225,67 +214,20 @@ class PPOAgent(object):
         print("PPOAgent:", self.agent_id, "Controller:", self.controller)
 
         env = gym.make("LoLGame-v0")
-        env.settings["map_name"] = "Old Summoners Rift"
-        env.settings["human_observer"] = run_client # Set to true to run league client
+        env.settings["map_name"] = "Old Summoners Rift" # Map to play on. Howling Abyss doesn't spawn minions
+        env.settings["human_observer"] = run_client # Set to True to run league client
         env.settings["host"] = FLAGS.host # Set this using "hostname -i" ip on Linux
-        env.settings["players"] = "Ezreal.BLUE,Ezreal.PURPLE" #"Ezreal.BLUE,Ezreal.PURPLE"
+        env.settings["players"] = "Ezreal.BLUE,Ezreal.PURPLE" # The champions each player will be
         env.settings["config_path"] = FLAGS.config_path
         env.settings["step_multiplier"] = FLAGS.step_multiplier
 
         self.env = env
 
+        # initialize vars used for computing the reward at each step
         self.old_me_kills = 0
         self.old_enemy_kills = 0
         self.old_me_hp_rat = 1
         self.old_enemy_hp_rat = 1
-
-    def convert_action(self, raw_obs, act): #_______________________________________________________________________________________________________________________
-        action_space = self.controller.action_space
-
-        me_pos = point.Point(raw_obs[0].observation["me_unit"].position_x,
-                                    raw_obs[0].observation["me_unit"].position_y)
-        enemy_pos = point.Point(raw_obs[0].observation["enemy_unit"].position_x,
-                                    raw_obs[0].observation["enemy_unit"].position_y)
-        
-        if act == 0:
-            act = [1, point.Point(8,4)]
-        elif act == 1:
-            act = [1, point.Point(0,4)]
-        elif act == 2:
-            act = [1, point.Point(4,8)]
-        elif act == 3:
-            act = [1, point.Point(4,0)]
-        elif act == 4: #Q
-            act = _SPELL + [[0], enemy_pos] if 2 in raw_obs[0].observation["available_actions"] else _NO_OP
-        elif act == 5: #W
-            act = _SPELL + [[1], enemy_pos] if 2 in raw_obs[0].observation["available_actions"] else _NO_OP
-        elif act == 6: #R
-            act = _SPELL + [[3], enemy_pos] if 2 in raw_obs[0].observation["available_actions"] else _NO_OP
-        elif act == 7: #E1
-            act = _NO_OP
-        elif act == 8: #E2
-            act = _SPELL + [[2], point.Point(me_pos.x + 0, me_pos.y + 400)] if 2 in raw_obs[0].observation["available_actions"] else _NO_OP
-        elif act == 9: #E3
-            act = _SPELL + [[2], point.Point(me_pos.x + 400, me_pos.y + 800)] if 2 in raw_obs[0].observation["available_actions"] else _NO_OP
-        elif act == 10: #E4
-            act = _SPELL + [[2], point.Point(me_pos.x + 400, me_pos.y + 0)] if 2 in raw_obs[0].observation["available_actions"] else _NO_OP
-        else:
-            act = _SPELL + [[2], point.Point(me_pos.x + 800, me_pos.y + 400)] if 2 in raw_obs[0].observation["available_actions"] else _NO_OP
-
-
-        enemy_action_possibilities = [
-            _SPELL + [[0], me_pos],
-            _SPELL + [[1], me_pos],
-            #_SPELL + [[2], point.Point(enemy_pos.x + 800, enemy_pos.y + 400)], 
-            #_SPELL + [[2], point.Point(enemy_pos.x + 0, enemy_pos.y + 400)], 
-            #_SPELL + [[2], point.Point(enemy_pos.x + 400, enemy_pos.y + 800)], 
-            #_SPELL + [[2], point.Point(enemy_pos.x + 400, enemy_pos.y + 0)], 
-            _SPELL + [[3], me_pos],
-            _NO_OP,_NO_OP,_NO_OP,_NO_OP#,_NO_OP,_NO_OP,_NO_OP
-        ]
-        actlist = [act, np.random.choice(enemy_action_possibilities)]
-        print("action list", actlist)
-        return actlist
 
     def save_pair(self, obs, act):
         action_space = self.controller.action_space
@@ -297,8 +239,64 @@ class PPOAgent(object):
     def close(self):
         self.env.close()
 
+    def convert_action(self, raw_obs, act):
+        """Converts a given action index within the action space into a list of actions for each player used by the env"""
+        me_pos = point.Point(raw_obs[0].observation["me_unit"].position_x,
+                                    raw_obs[0].observation["me_unit"].position_y)
+        enemy_pos = point.Point(raw_obs[0].observation["enemy_unit"].position_x,
+                                    raw_obs[0].observation["enemy_unit"].position_y)
+        
+        if act == 0: # Movement (direction 1)
+            act = _MOVE + [point.Point(8,4)]
+        elif act == 1: # Movement (direction 2)
+            act = _MOVE + [point.Point(0,4)]
+        elif act == 2: # Movement (direction 3)
+            act = _MOVE + [point.Point(4,8)]
+        elif act == 3: # Movement (direction 4)
+            act = _MOVE + [point.Point(4,0)]
+        elif act == 4: # Spell (Q)
+            act = _SPELL + [[0], enemy_pos] if 2 in raw_obs[0].observation["available_actions"] else _NO_OP
+        elif act == 5: # Spell (W)
+            act = _SPELL + [[1], enemy_pos] if 2 in raw_obs[0].observation["available_actions"] else _NO_OP
+        elif act == 6: # Spell (R)
+            act = _SPELL + [[3], enemy_pos] if 2 in raw_obs[0].observation["available_actions"] else _NO_OP
+        elif act == 7: # no action
+            act = _NO_OP
+        elif act == 8: # E (direction 1)
+            act = _SPELL + [[2], point.Point(me_pos.x + 0, me_pos.y + 400)] if 2 in raw_obs[0].observation["available_actions"] else _NO_OP
+        elif act == 9: # E (direction 2)
+            act = _SPELL + [[2], point.Point(me_pos.x + 400, me_pos.y + 800)] if 2 in raw_obs[0].observation["available_actions"] else _NO_OP
+        elif act == 10: # E (direction 3)
+            act = _SPELL + [[2], point.Point(me_pos.x + 400, me_pos.y + 0)] if 2 in raw_obs[0].observation["available_actions"] else _NO_OP
+        else: # E (direction 4)
+            act = _SPELL + [[2], point.Point(me_pos.x + 800, me_pos.y + 400)] if 2 in raw_obs[0].observation["available_actions"] else _NO_OP
+
+        # possible actions that enemy can take (_NO_OP, Q, W, R)
+        # disabled E because causes bugs with the hit-boxes of the players
+        enemy_action_possibilities = [
+            #_SPELL + [[2], point.Point(enemy_pos.x + 800, enemy_pos.y + 400)], 
+            #_SPELL + [[2], point.Point(enemy_pos.x + 0, enemy_pos.y + 400)], 
+            #_SPELL + [[2], point.Point(enemy_pos.x + 400, enemy_pos.y + 800)], 
+            #_SPELL + [[2], point.Point(enemy_pos.x + 400, enemy_pos.y + 0)],
+            _SPELL + [[0], me_pos], # Q
+            _SPELL + [[1], me_pos], # W
+            _SPELL + [[3], me_pos], # R
+            _NO_OP,_NO_OP,_NO_OP,_NO_OP   
+        ]
+        # enemy picks an action randomly from the set of possible actions
+        enemy_action_choice = np.random.choice(enemy_action_possibilities)
+
+        # return list of actions, one for each player
+        actlist = [act, enemy_action_choice]
+        print("action list", actlist)
+        return actlist
+
     def create_obs_vector(self, raw_obs):
-        # creating a more comprehensive observation vector
+        """Creates a comprehensive observation vector to input into the model
+        
+        See the link below for a list of available features and corresponding indices
+        https://github.com/jjlee0802cu/pylol/blob/main/pylol/lib/features.py
+        """
         arr = []
 
         me_unit = raw_obs[0].observation['me_unit']
@@ -315,15 +313,10 @@ class PPOAgent(object):
 
         arr = np.array(arr)[None].reshape(-1) / 100
 
-
-
         return arr
 
-    def run(self, max_steps):#_______________________________________________________________________________________________________________________
+    def run(self, max_steps):
         obs = self.env.reset()
-        
-        # Spawning agents at Y = 7000 due to Google Colab camera centering where agent 1 spawns
-        # Ensure escaping agent is slightly left of the enemy agent so going left is the best policy
         self.env.teleport(1, point.Point(7100.0, 7000.0))
         self.env.teleport(2, point.Point(7500.0, 7000.0))
         raw_obs = obs
@@ -337,34 +330,31 @@ class PPOAgent(object):
             #act = np.argmax(pred)
 
             act = self.convert_action(raw_obs, act)
-
             obs, rew, done, _ = self.env.step(act)
             raw_obs = obs
             obs = self.create_obs_vector(raw_obs)
-            
-            #rew = (raw_obs[0].observation["me_unit"].current_gold) #____________________________________________________________________________UNCOMMENT IF YOU WNAT REW TO BE JUST GOLD
 
             done = done[0]
             rews.append(rew)
-
             if done or steps == max_steps:
                 break
 
         print("Ran %d steps, got %f reward" % (len(rews), np.sum(rews)))
 
-    def train(self, epochs, batch_steps, episode_steps, experiment_name):#_______________________________________________________________________________________________________________________
-        final_out = "" # Used to store outputs
-
+    def train(self, epochs, batch_steps, episode_steps, experiment_name):
+        """Trains the PPO agent with specified number of epochs, batch_stes, and episode_steps"""
+        final_out = ""
         lll = []
-
         for epoch in range(epochs):
             st = time.perf_counter()
-            # X, Y, V, P = [], [], [], []
             ll = []
             while len(self.controller.X) < batch_steps:
+                # reset the environment and location of players
                 obs = self.env.reset()
                 self.env.teleport(1, point.Point(7100.0, 7000.0))
                 self.env.teleport(2, point.Point(7500.0, 7000.0))
+
+                # Get raw observation and create new observation vector
                 raw_obs = obs
                 obs = self.create_obs_vector(raw_obs)
 
@@ -374,24 +364,22 @@ class PPOAgent(object):
                     steps += 1
 
                     # Prediction, action, save prediction
-                    #print("[AGENT " + str(self.agent_id) + "]: obs[None] :=", obs[None])
                     pred, act = [x[0] for x in self.controller.pf(obs[None])]
                     self.controller.P.append(pred)
+                    print(pred)
 
-
-                    # Add random pick with 1 - alpha * epochs prob
+                    # Add a decaying randomness to the chosen action
                     probability = 1 - epoch/epochs
                     probability = 0 if probability < 0 else probability
                     if np.random.random_sample() < probability:
                         act = np.random.choice(act_space_size)
+                    
+                    # Add no-ops  for the first few steps in order to wait for training lag
                     if steps < 3:
-                        act = 7 # set to no-op for first few steps so that it doesn't troll us when it lags bc of fitting
+                        act = 7
 
                     # Save this state action pair
                     self.save_pair(obs, act)
-
-                    print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
-                    print(pred)
 
                     # Get action
                     act = self.convert_action(raw_obs, act)
@@ -401,11 +389,8 @@ class PPOAgent(object):
                     raw_obs = obs
                     obs = self.create_obs_vector(raw_obs)
                     
-                    
-
-
-
-
+                    # Compute reward using custom reward function
+                    # hp delta difference
                     me_hp_rat  = raw_obs[0].observation["me_unit"].current_hp / raw_obs[0].observation["me_unit"].max_hp
                     enemy_hp_rat  = raw_obs[0].observation["enemy_unit"].current_hp / raw_obs[0].observation["enemy_unit"].max_hp
                     delta_me_rat = me_hp_rat - self.old_me_hp_rat
@@ -413,7 +398,7 @@ class PPOAgent(object):
                     rew = delta_me_rat - delta_enemy_rat
                     self.old_me_hp_rat = me_hp_rat
                     self.old_enemy_hp_rat = enemy_hp_rat
-
+                    # kills (+20 for a kill, -20 for a death)
                     me_kills = raw_obs[0].observation["me_unit"].kill_count
                     enemy_kills = raw_obs[0].observation["enemy_unit"].kill_count
                     if me_kills > self.old_me_kills:
@@ -423,15 +408,9 @@ class PPOAgent(object):
                     self.old_me_kills = me_kills
                     self.old_enemy_kills = enemy_kills
 
-                    print("reward:", rew)
-                    
-
-
-
-
-
                     done = done[0]
                     rews.append(rew)
+                    print("reward:", rew)
 
                     if done or steps == episode_steps:
                         ll.append(np.sum(rews))
@@ -451,13 +430,14 @@ class PPOAgent(object):
         
         self.controller.plot_data(lll)
 
+        # Saving the experiment's output into a txt file
         with open(experiment_name + "_" + str(self.controller.units) + "_units_" + str(uuid.uuid4()) + ".txt", "w") as f:
             f.write(final_out)
 
 def main(unused_argv):
-    units = 1 # <= try changing this next...
+    units = 1
     gamma = 0.99
-    epochs = FLAGS.epochs # epochs = 50
+    epochs = FLAGS.epochs
     batch_steps = 200
     episode_steps = batch_steps
     experiment_name = "run_away"
@@ -467,7 +447,6 @@ def main(unused_argv):
     observation_space = Box(low=0, high=50000, shape=(45,), dtype=np.float32)
     action_space = Discrete(act_space_size)
     controller = Controller(units, gamma, observation_space, action_space)
-    # controller = Controller(units, gamma, batch_steps, observation_space, action_space)
 
     # Declare, train and run agent
     agent = PPOAgent(controller=controller, run_client=run_client)
@@ -476,7 +455,6 @@ def main(unused_argv):
                 episode_steps=episode_steps,
                 experiment_name=experiment_name)
     agent.run(max_steps=episode_steps)
-
     agent.close()
 
 def entry_point():
@@ -484,5 +462,3 @@ def entry_point():
 
 if __name__ == "__main__":
     app.run(main)
-
-#hehe
