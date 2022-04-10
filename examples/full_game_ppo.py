@@ -60,6 +60,9 @@ flags.DEFINE_bool("run_client", False, "Controls whether the game client is run 
 # Number of possible actions that PPO Agent can take
 act_space_size = 8
 
+# Number of steps to do NO_OPs in because of lag due to fitting
+fit_lag_offset = 10
+
 class Controller(object):
     def __init__(self,
                  units=1,
@@ -239,12 +242,16 @@ class PPOAgent(object):
     def close(self):
         self.env.close()
 
-    def convert_action(self, raw_obs, act):
-        """Converts a given action index within the action space into a list of actions for each player used by the env"""
-        me_pos = point.Point(raw_obs[0].observation["me_unit"].position_x,
-                                    raw_obs[0].observation["me_unit"].position_y)
-        enemy_pos = point.Point(raw_obs[0].observation["enemy_unit"].position_x,
-                                    raw_obs[0].observation["enemy_unit"].position_y)
+    def convert_action_singular(self, raw_obs, act, which_unit):
+        """Converts a given action index for the specified unit into an action used by the env"""
+
+        me_unit_str = 'me_unit' if which_unit == 'me_unit' else 'enemy_unit'
+        enemy_unit_str = 'enemy_unit' if which_unit == 'me_unit' else 'me_unit'
+        
+        me_pos = point.Point(raw_obs[0].observation[me_unit_str].position_x,
+                                    raw_obs[0].observation[me_unit_str].position_y)
+        enemy_pos = point.Point(raw_obs[0].observation[enemy_unit_str].position_x,
+                                    raw_obs[0].observation[enemy_unit_str].position_y)
         
         if act == 0: # Movement (direction 1)
             act = _MOVE + [point.Point(8,4)]
@@ -255,57 +262,46 @@ class PPOAgent(object):
         elif act == 3: # Movement (direction 4)
             act = _MOVE + [point.Point(4,0)]
         elif act == 4: # Spell (Q)
-            act = _SPELL + [[0], enemy_pos] if 2 in raw_obs[0].observation["available_actions"] else _NO_OP
+            act = _SPELL + [[0], enemy_pos]
         elif act == 5: # Spell (W)
-            act = _SPELL + [[1], enemy_pos] if 2 in raw_obs[0].observation["available_actions"] else _NO_OP
+            act = _SPELL + [[1], enemy_pos]
         elif act == 6: # Spell (R)
-            act = _SPELL + [[3], enemy_pos] if 2 in raw_obs[0].observation["available_actions"] else _NO_OP
+            act = _SPELL + [[3], enemy_pos]
         elif act == 7: # no action
             act = _NO_OP
         elif act == 8: # E (direction 1)
-            act = _SPELL + [[2], point.Point(me_pos.x + 0, me_pos.y + 400)] if 2 in raw_obs[0].observation["available_actions"] else _NO_OP
+            act = _SPELL + [[2], point.Point(me_pos.x + 0, me_pos.y + 400)]
         elif act == 9: # E (direction 2)
-            act = _SPELL + [[2], point.Point(me_pos.x + 400, me_pos.y + 800)] if 2 in raw_obs[0].observation["available_actions"] else _NO_OP
+            act = _SPELL + [[2], point.Point(me_pos.x + 400, me_pos.y + 800)]
         elif act == 10: # E (direction 3)
-            act = _SPELL + [[2], point.Point(me_pos.x + 400, me_pos.y + 0)] if 2 in raw_obs[0].observation["available_actions"] else _NO_OP
+            act = _SPELL + [[2], point.Point(me_pos.x + 400, me_pos.y + 0)]
         else: # E (direction 4)
-            act = _SPELL + [[2], point.Point(me_pos.x + 800, me_pos.y + 400)] if 2 in raw_obs[0].observation["available_actions"] else _NO_OP
+            act = _SPELL + [[2], point.Point(me_pos.x + 800, me_pos.y + 400)]
 
-        # possible actions that enemy can take (_NO_OP, Q, W, R)
-        # disabled E because causes bugs with the hit-boxes of the players
-        enemy_action_possibilities = [
-            #_SPELL + [[2], point.Point(enemy_pos.x + 800, enemy_pos.y + 400)], 
-            #_SPELL + [[2], point.Point(enemy_pos.x + 0, enemy_pos.y + 400)], 
-            #_SPELL + [[2], point.Point(enemy_pos.x + 400, enemy_pos.y + 800)], 
-            #_SPELL + [[2], point.Point(enemy_pos.x + 400, enemy_pos.y + 0)],
-            _SPELL + [[0], me_pos], # Q
-            _SPELL + [[1], me_pos], # W
-            _SPELL + [[3], me_pos], # R
-            _NO_OP,_NO_OP,_NO_OP,_NO_OP   
-        ]
-        # enemy picks an action randomly from the set of possible actions
-        enemy_action_choice = np.random.choice(enemy_action_possibilities)
+        return act
 
-        # return list of actions, one for each player
-        actlist = [act, enemy_action_choice]
-        print("action list", actlist)
-        return actlist
+    def convert_action(self, raw_obs, act, enemy_act):
+        """Converts a given action index within the action space for each unit into a list of actions for each unit used by the env"""
+        return [self.convert_action_singular(raw_obs, act, "me_unit"), self.convert_action_singular(raw_obs, enemy_act, "enemy_unit")]
 
-    def create_obs_vector(self, raw_obs):
-        """Creates a comprehensive observation vector to input into the model
+    def create_obs_vectors_singular(self, raw_obs, which_unit):
+        """Creates a singular observation vector from the persepctive of which_unit
         
         See the link below for a list of available features and corresponding indices
         https://github.com/jjlee0802cu/pylol/blob/main/pylol/lib/features.py
         """
+        me_unit_str = 'me_unit' if which_unit == 'me_unit' else 'enemy_unit'
+        enemy_unit_str = 'enemy_unit' if which_unit == 'me_unit' else 'me_unit'
+
         arr = []
 
-        me_unit = raw_obs[0].observation['me_unit']
+        me_unit = raw_obs[0].observation[me_unit_str]
         indices_to_omit = set([0,3,7,8,9,13,16,18,19,21,22,23,24,25])
         for i in range(len(me_unit)):
             if i not in indices_to_omit:
                 arr.append(me_unit[i])
 
-        enemy_unit = raw_obs[0].observation['enemy_unit']
+        enemy_unit = raw_obs[0].observation[enemy_unit_str]
         indices_to_omit = set([0,1,2,3,7,8,9,13,16,18,19,21,22])
         for i in range(len(enemy_unit)):
             if i not in indices_to_omit:
@@ -315,24 +311,29 @@ class PPOAgent(object):
 
         return arr
 
+    def create_obs_vectors(self, raw_obs):
+        """Creates a two observation vectors: one from me_unit's perspective and one from enemy_unit's perspective"""
+        return self.create_obs_vectors_singular(raw_obs, 'me_unit'), self.create_obs_vectors_singular(raw_obs, 'enemy_unit')
+
     def run(self, max_steps):
         obs = self.env.reset()
         self.env.teleport(1, point.Point(7100.0, 7000.0))
         self.env.teleport(2, point.Point(7500.0, 7000.0))
         raw_obs = obs
-        obs = self.create_obs_vector(raw_obs)
+        obs, enemy_obs = self.create_obs_vectors(raw_obs)
         rews = []
         steps = 0
 
         while True:
             steps += 1
             pred, act = [x[0] for x in self.controller.pf(obs[None])]
+            _, enemy_act = [x[0] for x in self.controller.pf(enemy_obs[None])]
             #act = np.argmax(pred)
 
-            act = self.convert_action(raw_obs, act)
+            act = self.convert_action(raw_obs, act, enemy_act)
             obs, rew, done, _ = self.env.step(act)
             raw_obs = obs
-            obs = self.create_obs_vector(raw_obs)
+            obs, enemy_obs = self.create_obs_vectors(raw_obs)
 
             done = done[0]
             rews.append(rew)
@@ -356,38 +357,45 @@ class PPOAgent(object):
 
                 # Get raw observation and create new observation vector
                 raw_obs = obs
-                obs = self.create_obs_vector(raw_obs)
+                obs, enemy_obs = self.create_obs_vectors(raw_obs)
 
                 rews = []
                 steps = 0
                 while True:
+                    print()
                     steps += 1
 
                     # Prediction, action, save prediction
                     pred, act = [x[0] for x in self.controller.pf(obs[None])]
+                    _, enemy_act = [x[0] for x in self.controller.pf(enemy_obs[None])]
                     self.controller.P.append(pred)
-                    print(pred)
+                    #print(pred)
 
                     # Add a decaying randomness to the chosen action
                     probability = 1 - epoch/epochs
                     probability = 0 if probability < 0 else probability
                     if np.random.random_sample() < probability:
                         act = np.random.choice(act_space_size)
+
+                    if np.random.random_sample() < probability:
+                        enemy_act = np.random.choice(act_space_size)
                     
                     # Add no-ops  for the first few steps in order to wait for training lag
-                    if steps < 3:
+                    if steps < fit_lag_offset:
                         act = 7
+                        enemy_act = 7
 
                     # Save this state action pair
                     self.save_pair(obs, act)
 
                     # Get action
-                    act = self.convert_action(raw_obs, act)
+                    act = self.convert_action(raw_obs, act, enemy_act)
+                    print(act)
 
                     # Take the action and save the reward
                     obs, rew, done, _ = self.env.step(act)
                     raw_obs = obs
-                    obs = self.create_obs_vector(raw_obs)
+                    obs, enemy_obs = self.create_obs_vectors(raw_obs)
                     
                     # Compute reward using custom reward function
                     # hp delta difference
@@ -431,14 +439,14 @@ class PPOAgent(object):
         self.controller.plot_data(lll)
 
         # Saving the experiment's output into a txt file
-        with open(experiment_name + "_" + str(self.controller.units) + "_units_" + str(uuid.uuid4()) + ".txt", "w") as f:
-            f.write(final_out)
+        #with open(experiment_name + "_" + str(self.controller.units) + "_units_" + str(uuid.uuid4()) + ".txt", "w") as f:
+        #    f.write(final_out)
 
 def main(unused_argv):
     units = 1
     gamma = 0.99
     epochs = FLAGS.epochs
-    batch_steps = 200
+    batch_steps = 200 + fit_lag_offset
     episode_steps = batch_steps
     experiment_name = "run_away"
     run_client = FLAGS.run_client
