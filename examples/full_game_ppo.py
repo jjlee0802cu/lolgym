@@ -61,14 +61,15 @@ flags.DEFINE_bool("run_client", False, "Controls whether the game client is run 
 act_space_size = 8
 
 # Number of steps to do NO_OPs in because of lag due to fitting
-fit_lag_offset = 10
+fit_lag_offset = 200
 
 class Controller(object):
     def __init__(self,
                  units=1,
                  gamma=0.99,
                  observation_space=None,
-                 action_space=None):
+                 action_space=None,
+                 name='agent'):
 
         self.units = units
         self.gamma = gamma
@@ -88,15 +89,7 @@ class Controller(object):
         self.d_agents = 0
         self.cur_updating = True
 
-    def plot_data(self, lll):
-        plt.figure(figsize=(16, 8))
-        plt.subplot(1,2,1)
-        plt.plot([x[1] for x in lll], label="Mean Episode Reward")
-        plt.plot([x[2] for x in lll], label="Epoch Loss")
-        plt.legend()
-        plt.subplot(1,2,2)
-        plt.plot([x[3] for x in lll], color='green', label="value Loss")
-        plt.legend()
+        self.name = name
 
     def init_value_function(self, units):
         observation_space = self.observation_space
@@ -166,18 +159,12 @@ class Controller(object):
         V = self.V
         P = self.P
 
-        self.d_agents += 1
-
-        print("[FIT] FIT CHECK:", self.d_agents, self.n_agents)
-        #print(X)
-        #print(Y)
-        #print(V)
-        #print(P)
+        self.d_agents += 1 
 
         if self.d_agents < self.n_agents:
             return None, None
 
-        print("[FIT] TRAINING ON DATA")
+        print("[FIT] TRAINING ON DATA FOR", self.name)
         X, Y, V, P = [np.array(x) for x in [X, Y, V, P]]
 
         # Subtract value baseline to get advantage
@@ -223,14 +210,13 @@ class PPOAgent(object):
         env.settings["players"] = "Ezreal.BLUE,Ezreal.PURPLE" # The champions each player will be
         env.settings["config_path"] = FLAGS.config_path
         env.settings["step_multiplier"] = FLAGS.step_multiplier
-
         self.env = env
 
         # initialize vars used for computing the reward at each step
         self.old_me_kills = 0
         self.old_enemy_kills = 0
-        self.old_me_hp_rat = 1
-        self.old_enemy_hp_rat = 1
+        self.old_me_hp_ratio = 1
+        self.old_enemy_hp_ratio = 1
 
     def save_pair(self, obs, act):
         action_space = self.controller.action_space
@@ -242,49 +228,55 @@ class PPOAgent(object):
     def close(self):
         self.env.close()
 
-    def convert_action_singular(self, raw_obs, act, which_unit):
-        """Converts a given action index for the specified unit into an action used by the env"""
 
-        me_unit_str = 'me_unit' if which_unit == 'me_unit' else 'enemy_unit'
-        enemy_unit_str = 'enemy_unit' if which_unit == 'me_unit' else 'me_unit'
-        
-        me_pos = point.Point(raw_obs[0].observation[me_unit_str].position_x,
-                                    raw_obs[0].observation[me_unit_str].position_y)
-        enemy_pos = point.Point(raw_obs[0].observation[enemy_unit_str].position_x,
-                                    raw_obs[0].observation[enemy_unit_str].position_y)
-        
-        if act == 0: # Movement (direction 1)
-            act = _MOVE + [point.Point(8,4)]
-        elif act == 1: # Movement (direction 2)
-            act = _MOVE + [point.Point(0,4)]
-        elif act == 2: # Movement (direction 3)
-            act = _MOVE + [point.Point(4,8)]
-        elif act == 3: # Movement (direction 4)
-            act = _MOVE + [point.Point(4,0)]
-        elif act == 4: # Spell (Q)
-            act = _SPELL + [[0], enemy_pos]
-        elif act == 5: # Spell (W)
-            act = _SPELL + [[1], enemy_pos]
-        elif act == 6: # Spell (R)
-            act = _SPELL + [[3], enemy_pos]
-        elif act == 7: # no action
-            act = _NO_OP
-        elif act == 8: # E (direction 1)
-            act = _SPELL + [[2], point.Point(me_pos.x + 0, me_pos.y + 400)]
-        elif act == 9: # E (direction 2)
-            act = _SPELL + [[2], point.Point(me_pos.x + 400, me_pos.y + 800)]
-        elif act == 10: # E (direction 3)
-            act = _SPELL + [[2], point.Point(me_pos.x + 400, me_pos.y + 0)]
-        else: # E (direction 4)
-            act = _SPELL + [[2], point.Point(me_pos.x + 800, me_pos.y + 400)]
 
-        return act
 
-    def convert_action(self, raw_obs, act, enemy_act):
-        """Converts a given action index within the action space for each unit into a list of actions for each unit used by the env"""
-        return [self.convert_action_singular(raw_obs, act, "me_unit"), self.convert_action_singular(raw_obs, enemy_act, "enemy_unit")]
 
-    def create_obs_vectors_singular(self, raw_obs, which_unit):
+
+
+def convert_action_singular(raw_obs, act, which_unit):
+    """Converts a given action index for the specified unit into an action used by the env"""
+
+    me_unit_str = 'me_unit' if which_unit == 'me_unit' else 'enemy_unit'
+    enemy_unit_str = 'enemy_unit' if which_unit == 'me_unit' else 'me_unit'
+    
+    me_pos = point.Point(raw_obs[0].observation[me_unit_str].position_x,
+                                raw_obs[0].observation[me_unit_str].position_y)
+    enemy_pos = point.Point(raw_obs[0].observation[enemy_unit_str].position_x,
+                                raw_obs[0].observation[enemy_unit_str].position_y)
+    
+    if act == 0: # Movement (direction 1)
+        act = _MOVE + [point.Point(8,4)]
+    elif act == 1: # Movement (direction 2)
+        act = _MOVE + [point.Point(0,4)]
+    elif act == 2: # Movement (direction 3)
+        act = _MOVE + [point.Point(4,8)]
+    elif act == 3: # Movement (direction 4)
+        act = _MOVE + [point.Point(4,0)]
+    elif act == 4: # Spell (Q)
+        act = _SPELL + [[0], enemy_pos]
+    elif act == 5: # Spell (W)
+        act = _SPELL + [[1], enemy_pos]
+    elif act == 6: # Spell (R)
+        act = _SPELL + [[3], enemy_pos]
+    elif act == 7: # no action
+        act = _NO_OP
+    elif act == 8: # E (direction 1)
+        act = _SPELL + [[2], point.Point(me_pos.x + 0, me_pos.y + 400)]
+    elif act == 9: # E (direction 2)
+        act = _SPELL + [[2], point.Point(me_pos.x + 400, me_pos.y + 800)]
+    elif act == 10: # E (direction 3)
+        act = _SPELL + [[2], point.Point(me_pos.x + 400, me_pos.y + 0)]
+    else: # E (direction 4)
+        act = _SPELL + [[2], point.Point(me_pos.x + 800, me_pos.y + 400)]
+
+    return act
+
+def convert_action(raw_obs, act, enemy_act):
+    """Converts a given action index within the action space for each unit into a list of actions for each unit used by the env"""
+    return [convert_action_singular(raw_obs, act, "me_unit"), convert_action_singular(raw_obs, enemy_act, "enemy_unit")]
+
+def create_obs_vectors_singular(raw_obs, which_unit):
         """Creates a singular observation vector from the persepctive of which_unit
         
         See the link below for a list of available features and corresponding indices
@@ -311,136 +303,166 @@ class PPOAgent(object):
 
         return arr
 
-    def create_obs_vectors(self, raw_obs):
-        """Creates a two observation vectors: one from me_unit's perspective and one from enemy_unit's perspective"""
-        return self.create_obs_vectors_singular(raw_obs, 'me_unit'), self.create_obs_vectors_singular(raw_obs, 'enemy_unit')
+def create_obs_vectors(raw_obs):
+    """Creates a two observation vectors: one from me_unit's perspective and one from enemy_unit's perspective"""
+    return create_obs_vectors_singular(raw_obs, 'me_unit'), create_obs_vectors_singular(raw_obs, 'enemy_unit')
 
-    def run(self, max_steps):
-        obs = self.env.reset()
-        self.env.teleport(1, point.Point(7100.0, 7000.0))
-        self.env.teleport(2, point.Point(7500.0, 7000.0))
-        raw_obs = obs
-        obs, enemy_obs = self.create_obs_vectors(raw_obs)
-        rews = []
-        steps = 0
+def compute_rewards(agent1, agent2, raw_obs):
+    """Compute reward using custom reward function"""
+    # hp delta difference
+    agent1_hp_ratio = raw_obs[0].observation["me_unit"].current_hp / raw_obs[0].observation["me_unit"].max_hp
+    agent2_hp_ratio = raw_obs[0].observation["enemy_unit"].current_hp / raw_obs[0].observation["enemy_unit"].max_hp
+    
+    agent1_delta_ratio = agent1_hp_ratio - agent1.old_me_hp_ratio
+    agent2_delta_ratio = agent2_hp_ratio - agent2.old_me_hp_ratio
 
-        while True:
-            steps += 1
-            pred, act = [x[0] for x in self.controller.pf(obs[None])]
-            _, enemy_act = [x[0] for x in self.controller.pf(enemy_obs[None])]
-            #act = np.argmax(pred)
+    agent1_rew = agent1_delta_ratio - agent2_delta_ratio
+    agent2_rew = agent2_delta_ratio - agent1_delta_ratio
 
-            act = self.convert_action(raw_obs, act, enemy_act)
-            obs, rew, done, _ = self.env.step(act)
+    agent1.old_me_hp_ratio = agent1_hp_ratio
+    agent1.old_enemyh_hp_ratio = agent2_hp_ratio
+    agent2.old_me_hp_ratio = agent2_hp_ratio
+    agent2.old_enemyh_hp_ratio = agent1_hp_ratio
+
+    # kills (+20 for a kill, -20 for a death)
+    agent1_kills = raw_obs[0].observation["me_unit"].kill_count
+    agent2_kills = raw_obs[0].observation["enemy_unit"].kill_count
+
+    if agent1_kills > agent1.old_me_kills:
+        agent1_rew = 20
+    if agent2_kills > agent1.old_enemy_kills:
+        agent1_rew = -20
+
+    if agent2_kills > agent2.old_me_kills:
+        agent2_rew = 20
+    if agent1_kills > agent2.old_enemy_kills:
+        agent2_rew = -20
+
+    agent1.old_me_kills = agent1_kills
+    agent1.old_enemy_kills = agent2_kills
+    agent2.old_me_kills = agent2_kills
+    agent2.old_enemy_kills = agent1_kills
+
+    return agent1_rew, agent2_rew
+
+def train_both(agent1, agent2, epochs, batch_steps, episode_steps):
+    """Trains two PPO agents with specified number of epochs, batch_stes, and episode_steps"""
+    final_out = ""
+    lll1 = []
+    lll2 = []
+
+    # use agent1's controller as the main environment controller
+    controller = agent1.controller
+    env = agent1.env 
+
+    for epoch in range(epochs):
+        st = time.perf_counter()
+        ll1 = []
+        ll2 = []
+
+        while len(controller.X) < batch_steps:
+            # reset the environment and location of players
+            obs = env.reset()
+            env.teleport(1, point.Point(7100.0, 7000.0))
+            env.teleport(2, point.Point(7500.0, 7000.0))
+
+            # Get raw observation and create new observation vector
             raw_obs = obs
-            obs, enemy_obs = self.create_obs_vectors(raw_obs)
+            agent1_obs, agent2_obs = create_obs_vectors(raw_obs)
 
-            done = done[0]
-            rews.append(rew)
-            if done or steps == max_steps:
-                break
+            rews1 = []
+            rews2 = []
+            steps = 0
+            while True:
+                print()
+                steps += 1
 
-        print("Ran %d steps, got %f reward" % (len(rews), np.sum(rews)))
+                # Prediction, action, save prediction
+                agent1_pred, agent1_act = [x[0] for x in agent1.controller.pf(agent1_obs[None])]
+                agent2_pred, agent2_act = [x[0] for x in agent2.controller.pf(agent2_obs[None])]
+                agent1.controller.P.append(agent1_pred)
+                agent2.controller.P.append(agent2_pred)
 
-    def train(self, epochs, batch_steps, episode_steps, experiment_name):
-        """Trains the PPO agent with specified number of epochs, batch_stes, and episode_steps"""
-        final_out = ""
-        lll = []
-        for epoch in range(epochs):
-            st = time.perf_counter()
-            ll = []
-            while len(self.controller.X) < batch_steps:
-                # reset the environment and location of players
-                obs = self.env.reset()
-                self.env.teleport(1, point.Point(7100.0, 7000.0))
-                self.env.teleport(2, point.Point(7500.0, 7000.0))
-
-                # Get raw observation and create new observation vector
-                raw_obs = obs
-                obs, enemy_obs = self.create_obs_vectors(raw_obs)
-
-                rews = []
-                steps = 0
-                while True:
-                    print()
-                    steps += 1
-
-                    # Prediction, action, save prediction
-                    pred, act = [x[0] for x in self.controller.pf(obs[None])]
-                    _, enemy_act = [x[0] for x in self.controller.pf(enemy_obs[None])]
-                    self.controller.P.append(pred)
-                    #print(pred)
-
-                    # Add a decaying randomness to the chosen action
+                # Add no-ops  for the first few steps in order to wait for training lag
+                if steps < fit_lag_offset:
+                    agent1_act = 7
+                    agent2_act = 7
+                else: # Add a decaying randomness to the chosen action
                     probability = 1 - epoch/epochs
                     probability = 0 if probability < 0 else probability
                     if np.random.random_sample() < probability:
-                        act = np.random.choice(act_space_size)
-
+                        agent1_act = np.random.choice(act_space_size)
                     if np.random.random_sample() < probability:
-                        enemy_act = np.random.choice(act_space_size)
-                    
-                    # Add no-ops  for the first few steps in order to wait for training lag
-                    if steps < fit_lag_offset:
-                        act = 7
-                        enemy_act = 7
+                        agent2_act = np.random.choice(act_space_size)
 
-                    # Save this state action pair
-                    self.save_pair(obs, act)
+                # Save this state action pair
+                agent1.save_pair(agent1_obs, agent1_act)
+                agent2.save_pair(agent2_obs, agent2_act)
 
-                    # Get action
-                    act = self.convert_action(raw_obs, act, enemy_act)
-                    print(act)
+                # Get action
+                act = convert_action(raw_obs, agent1_act, agent2_act)
+                print(act)
 
-                    # Take the action and save the reward
-                    obs, rew, done, _ = self.env.step(act)
-                    raw_obs = obs
-                    obs, enemy_obs = self.create_obs_vectors(raw_obs)
-                    
-                    # Compute reward using custom reward function
-                    # hp delta difference
-                    me_hp_rat  = raw_obs[0].observation["me_unit"].current_hp / raw_obs[0].observation["me_unit"].max_hp
-                    enemy_hp_rat  = raw_obs[0].observation["enemy_unit"].current_hp / raw_obs[0].observation["enemy_unit"].max_hp
-                    delta_me_rat = me_hp_rat - self.old_me_hp_rat
-                    delta_enemy_rat = enemy_hp_rat - self.old_enemy_hp_rat
-                    rew = delta_me_rat - delta_enemy_rat
-                    self.old_me_hp_rat = me_hp_rat
-                    self.old_enemy_hp_rat = enemy_hp_rat
-                    # kills (+20 for a kill, -20 for a death)
-                    me_kills = raw_obs[0].observation["me_unit"].kill_count
-                    enemy_kills = raw_obs[0].observation["enemy_unit"].kill_count
-                    if me_kills > self.old_me_kills:
-                        rew = 20
-                    if enemy_kills > self.old_enemy_kills:
-                        rew = -20
-                    self.old_me_kills = me_kills
-                    self.old_enemy_kills = enemy_kills
+                # Take the action and save the reward
+                obs, _, done, _ = env.step(act)
+                raw_obs = obs
+                agent1_obs, agent2_obs = create_obs_vectors(raw_obs)
 
-                    done = done[0]
-                    rews.append(rew)
-                    print("reward:", rew)
+                # Compute rewards for each agent and save
+                agent1_rew, agent2_rew = compute_rewards(agent1, agent2, raw_obs)
+                rews1.append(agent1_rew)
+                rews2.append(agent2_rew)
+                #print("rewards:")
+                #print("\t Agent 1:", agent1_rew)
+                #print("\t Agent 2:", agent2_rew)
 
-                    if done or steps == episode_steps:
-                        ll.append(np.sum(rews))
-                        for i in range(len(rews)-2, -1, -1):
-                            rews[i] += rews[i+1] * self.controller.gamma
-                        self.controller.V.extend(rews)
-                        break
-            
-            loss, vloss = self.controller.fit()
 
-            if loss != None and vloss != None:
-                lll.append((epoch, np.mean(ll), loss, vloss, len(self.controller.X), len(ll), time.perf_counter() - st))
-                print("%3d  ep_rew:%9.2f  loss:%7.2f   vloss:%9.2f  counts: %5d/%3d tm: %.2f s" % lll[-1])
-                self.env.broadcast_msg("Episode No: %3d  Episode Reward: %9.2f" % (lll[-1][0], lll[-1][1]))
-                sign = "+" if lll[-1][1] >= 0 else ""
-                final_out += sign + str(lll[-1][1])
+
+
+
+                done = done[0]
+                if steps == episode_steps: #or done:
+                    ll1.append(np.sum(rews1))
+                    ll2.append(np.sum(rews2))
+
+                    for i in range(len(rews1)-2, -1, -1):
+                        rews1[i] += rews1[i+1] * agent1.controller.gamma
+                    agent1.controller.V.extend(rews1)
+
+                    for i in range(len(rews2)-2, -1, -1):
+                        rews2[i] += rews2[i+1] * agent2.controller.gamma
+                    agent2.controller.V.extend(rews2)
+
+                    break
         
-        self.controller.plot_data(lll)
+        loss1, vloss1 = agent1.controller.fit()
+        loss2, vloss2 = agent2.controller.fit()
 
-        # Saving the experiment's output into a txt file
-        #with open(experiment_name + "_" + str(self.controller.units) + "_units_" + str(uuid.uuid4()) + ".txt", "w") as f:
-        #    f.write(final_out)
+
+
+
+        if loss1 != None and vloss1 != None:
+            lll1.append((epoch, np.mean(ll1), loss1, vloss1, len(agent1.controller.X), len(ll1), time.perf_counter() - st))
+            print("%3d  ep_rew:%9.2f  loss:%7.2f   vloss:%9.2f  counts: %5d/%3d tm: %.2f s" % lll1[-1])
+            env.broadcast_msg("Episode No: %3d  Episode Reward: %9.2f" % (lll1[-1][0], lll1[-1][1]))
+            sign = "+" if lll1[-1][1] >= 0 else ""
+            final_out += sign + str(lll1[-1][1])
+
+        if loss2 != None and vloss2 != None:
+            lll2.append((epoch, np.mean(ll2), loss2, vloss2, len(agent2.controller.X), len(ll2), time.perf_counter() - st))
+            print("%3d  ep_rew:%9.2f  loss:%7.2f   vloss:%9.2f  counts: %5d/%3d tm: %.2f s\n" % lll2[-1])
+            env.broadcast_msg("Episode No: %3d  Episode Reward: %9.2f" % (lll2[-1][0], lll2[-1][1]))
+            sign = "+" if lll2[-1][1] >= 0 else ""
+            final_out += sign + str(lll2[-1][1])
+
+def save_model(agent, i):
+    print()
+    print('saving popt')
+    tf.keras.models.save_model(agent.controller.popt, f'./lolgym/examples/saved_models/adversarial_popt{i}')
+    print('saving p')
+    tf.keras.models.save_model(agent.controller.p, f'./lolgym/examples/saved_models/adversarial_p{i}')
+    print('saving v')
+    tf.keras.models.save_model(agent.controller.v, f'./lolgym/examples/saved_models/adversarial_v{i}')
 
 def main(unused_argv):
     units = 1
@@ -448,22 +470,22 @@ def main(unused_argv):
     epochs = FLAGS.epochs
     batch_steps = 200 + fit_lag_offset
     episode_steps = batch_steps
-    experiment_name = "run_away"
     run_client = FLAGS.run_client
 
     # Declare observation space, action space and model controller
     observation_space = Box(low=0, high=50000, shape=(45,), dtype=np.float32)
     action_space = Discrete(act_space_size)
-    controller = Controller(units, gamma, observation_space, action_space)
+    controller1 = Controller(units, gamma, observation_space, action_space, 'CONTROLLER 1')
+    controller2 = Controller(units, gamma, observation_space, action_space, 'CONTROLLER 2')
 
     # Declare, train and run agent
-    agent = PPOAgent(controller=controller, run_client=run_client)
-    agent.train(epochs=epochs,
-                batch_steps=batch_steps,
-                episode_steps=episode_steps,
-                experiment_name=experiment_name)
-    agent.run(max_steps=episode_steps)
-    agent.close()
+    agent1 = PPOAgent(controller=controller1, run_client=run_client)
+    agent2 = PPOAgent(controller=controller2, run_client=run_client)
+    train_both(agent1, agent2, epochs=epochs, batch_steps=batch_steps, episode_steps=episode_steps)
+    save_model(agent1, "1")
+    save_model(agent2, "2")
+    agent1.close()
+    agent2.close()
 
 def entry_point():
     app.run(main)
