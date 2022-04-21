@@ -53,10 +53,10 @@ pip3 install redis
 sudo apt-get install redis-server
 ```
 
-### Write config dirs
+### Write config dirs (Game Server)
 ```shell
 touch PATH/TO/config_dirs.txt
-printf "[dirs]\ngameserver = PATH/TO/LeagueSandbox-RL-Learning/GameServerConsole/bin/Debug/netcoreapp3.0/\nlolclient = " > PATH/TO/config_dirs.txt
+printf "[dirs]\ngameserver = PATH/TO/LeagueSandbox-RL-Learning/GameServerConsole/bin/Debug/netcoreapp3.0/\n" > PATH/TO/config_dirs.txt
 ```
 
 ### Download LoL client
@@ -80,4 +80,22 @@ winetricks d3dx9
 ### Extract LoL Client
 ```shell
 tar -xzvf league-of-legends-420.tar.gz
+```
+
+### Run Client
+```shell
+pip install pyautogui
+pip install Xlib
+```
+
+### Write config dirs (LoL Client)
+```shell
+touch PATH/TO/config_dirs.txt
+printf "lolclient = /content/League-of-Legends-4-20/RADS/solutions/lol_game_client_sln/releases/0.0.1.68/deploy/" > config_dirs.txt
+```
+
+### Install LolGym
+```shell
+git clone https://github.com/jjlee0802cu/lolgym.git
+pip3 install -e lolgym/
 ```
