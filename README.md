@@ -1,5 +1,10 @@
 # LoLGym for COMS4995 Deep Learning Project
 
+## About
+
+This repo contains code to train an agent to play league of legends using the PPO algorithm. In this project, we built an AI capable of playing and winning in the
+game League of Legends, a popular multiplayer game created by Riot Games. We implement a model that uses the existing deep reinforcement learning practice of Proximal Policy Optimization (PPO) alongside an adversarial multi-agent architecture to outperform existing hard-coded bots and human players in a 1v1 game.
+
 ## Installation
 
 ### Install .NET
@@ -23,7 +28,8 @@ sudo apt-get update; \
   sudo apt-get install -y dotnet-sdk-3.1
 ```
 
-### Clone GameServer
+### Clone GameServer 
+Download the 4.20 version of League game client
 
 ```shell
 git clone https://github.com/MiscellaneousStuff/LeagueSandbox-RL-Learning
@@ -72,6 +78,7 @@ sudo apt install wine64 wine32 -y
 ```
 
 ### Install Winetricks
+Without this you will get into the game, but your screen will be black.
 ```shell
 sudo apt-get install winetricks -y
 winetricks d3dx9
@@ -101,6 +108,15 @@ pip3 install -e lolgym/
 ```
 
 ## Usage
+
+### PPO Agent trained against hard-coded scripted intermediate bot (Milestone)
+Use commit 0c4958342468c1673e1f86046114b629f0268328
+```shell
+python3 ./lolgym/examples/full_game_ppo.py --epochs 200 --host <public_ip> --config_path "PATH/TO/config_dirs.txt" --run_client
+```
+
+### Two PPO Agents trained against each other using adversarial multi-agent architecture (Final report)
+Use commit 5031243750aaeca52dd4f2d310681a90554cdeda
 ```shell
 python3 ./lolgym/examples/full_game_ppo.py --epochs 200 --host <public_ip> --config_path "PATH/TO/config_dirs.txt" --run_client
 ```
