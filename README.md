@@ -99,3 +99,8 @@ printf "lolclient = /content/League-of-Legends-4-20/RADS/solutions/lol_game_clie
 git clone https://github.com/jjlee0802cu/lolgym.git
 pip3 install -e lolgym/
 ```
+
+## Usage
+```shell
+python3 ./lolgym/examples/full_game_ppo.py --epochs 200 --host <public_ip> --config_path "PATH/TO/config_dirs.txt" --run_client
+```
