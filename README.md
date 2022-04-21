@@ -2,8 +2,9 @@
 
 ## About
 
-This repo contains code to train an agent to play league of legends using the PPO algorithm. In this project, we built an AI capable of playing and winning in the
-game League of Legends, a popular multiplayer game created by Riot Games. We implement a model that uses the existing deep reinforcement learning practice of Proximal Policy Optimization (PPO) alongside an adversarial multi-agent architecture to outperform existing hard-coded bots and human players in a 1v1 game.
+This repo contains code to train an agent to play league of legends using the PPO algorithm and can be found in examples/full_game_ppo.py. In this project, we built an AI capable of playing and winning in the game League of Legends, a popular multiplayer game created by Riot Games. We implement a model that uses the existing deep reinforcement learning practice of Proximal Policy Optimization (PPO) alongside an adversarial multi-agent architecture to outperform existing hard-coded bots and human players in a 1v1 game.
+
+This repo is forked from https://github.com/MiscellaneousStuff/lolgym
 
 ## Installation
 
