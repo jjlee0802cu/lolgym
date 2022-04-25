@@ -184,7 +184,7 @@ class Controller(object):
 
         return loss, vloss
 
-    def get_pred_act(obs):
+    def get_pred_act(self, obs):
         pred, act = [x[0] for x in self.pf(obs[None])]
         return pred, act
 
@@ -227,12 +227,6 @@ class PPOAgent(object):
 
     def close(self):
         self.env.close()
-
-
-
-
-
-
 
 def convert_action_singular(raw_obs, act, which_unit):
     """Converts a given action index for the specified unit into an action used by the env"""
@@ -356,6 +350,7 @@ def train_both(agent1, agent2, epochs, batch_steps, episode_steps):
     env = agent1.env 
 
     for epoch in range(epochs):
+        print(epoch)
         st = time.perf_counter()
         ll1 = []
         ll2 = []
@@ -401,7 +396,7 @@ def train_both(agent1, agent2, epochs, batch_steps, episode_steps):
 
                 # Get action
                 act = convert_action(raw_obs, agent1_act, agent2_act)
-                print(act)
+                print("\t", act)
 
                 # Take the action and save the reward
                 obs, _, done, _ = env.step(act)
@@ -416,12 +411,8 @@ def train_both(agent1, agent2, epochs, batch_steps, episode_steps):
                 #print("\t Agent 1:", agent1_rew)
                 #print("\t Agent 2:", agent2_rew)
 
-
-
-
-
                 done = done[0]
-                if steps == episode_steps: #or done:
+                if steps == episode_steps or done:
                     ll1.append(np.sum(rews1))
                     ll2.append(np.sum(rews2))
 
@@ -437,9 +428,6 @@ def train_both(agent1, agent2, epochs, batch_steps, episode_steps):
         
         loss1, vloss1 = agent1.controller.fit()
         loss2, vloss2 = agent2.controller.fit()
-
-
-
 
         if loss1 != None and vloss1 != None:
             lll1.append((epoch, np.mean(ll1), loss1, vloss1, len(agent1.controller.X), len(ll1), time.perf_counter() - st))
