@@ -1,111 +1,123 @@
-<div align="center">
-    <a href="https://www.youtube.com/watch?v=yVUKi63WfDA"
-       target="_blank">
-       <img src="http://img.youtube.com/vi/yVUKi63WfDA/0.jpg"
-            alt="Example PPO implementation in League of Legends"
-            width="240" height="180" border="10" />
-    </a>
-</div>
+# LoLGym for COMS4995 Deep Learning Project
 
-# PyLoL OpenAI Gym Environments
+## About
 
-OpenAI Gym Environments for the League of Legends v4.20
-PyLoL environment.
+This repo contains code to train an agent to play league of legends using the PPO algorithm and can be found in examples/full_game_ppo.py. In this project, we built an AI capable of playing and winning in the game League of Legends, a popular multiplayer game created by Riot Games. We implement a model that uses the existing deep reinforcement learning practice of Proximal Policy Optimization (PPO) alongside an adversarial multi-agent architecture to outperform existing hard-coded bots and human players in a 1v1 game.
+
+This repo is forked from https://github.com/MiscellaneousStuff/lolgym
 
 ## Installation
 
-You can install LoLGym from a local clone of the git repo:
+### Install .NET
 
 ```shell
-git clone https://github.com/MiscellaneousStuff/lolgym.git
+wget -q https://packages.microsoft.com/config/ubuntu/18.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
+sudo dpkg -i packages-microsoft-prod.deb
+add-apt-repository universe
+apt-get update
+apt-get install apt-transport-https
+apt-get update
+apt-get install dotnet-sdk-3.1
+```
+
+### Install the runtime
+
+```shell
+sudo apt-get update; \
+  sudo apt-get install -y apt-transport-https && \
+  sudo apt-get update && \
+  sudo apt-get install -y dotnet-sdk-3.1
+```
+
+### Clone GameServer 
+Download the 4.20 version of League game client
+
+```shell
+git clone https://github.com/MiscellaneousStuff/LeagueSandbox-RL-Learning
+cd LeagueSandbox-RL-Learning && git checkout master && git branch && git submodule init && git submodule update
+```
+
+### Build GameServer
+```shell
+cd LeagueSandbox-RL-Learning  && dotnet build .
+```
+
+### Run game server to generate configs
+```shell
+cd /content/LeagueSandbox-RL-Learning/GameServerConsole/bin/Debug/netcoreapp3.0/ && \
+/content/LeagueSandbox-RL-Learning/GameServerConsole/bin/Debug/netcoreapp3.0/GameServerConsole --redis_port 6379
+```
+
+### Install PyLOL
+```shell
+git clone -v https://github.com/jjlee0802cu/pylol.git
+pip3 install --upgrade pylol/
+```
+
+### Install Redis Client and Redis Server
+```shell
+pip3 install redis
+sudo apt-get install redis-server
+```
+
+### Write config dirs (Game Server)
+```shell
+touch PATH/TO/config_dirs.txt
+printf "[dirs]\ngameserver = PATH/TO/LeagueSandbox-RL-Learning/GameServerConsole/bin/Debug/netcoreapp3.0/\n" > PATH/TO/config_dirs.txt
+```
+
+### Download LoL client
+```shell
+!wget --no-check-certificate --load-cookies /tmp/cookies.txt "https://docs.google.com/uc?export=download&confirm=$(wget --quiet --save-cookies /tmp/cookies.txt --keep-session-cookies --no-check-certificate 'https://docs.google.com/uc?export=download&id=1vkrdzSxTN6FPP7A9R65bIEBNefU7vDJL' -O- | sed -rn 's/.*confirm=([0-9A-Za-z_]+).*/\1\n/p')&id=1vkrdzSxTN6FPP7A9R65bIEBNefU7vDJL" -O league-of-legends-420.tar.gz && rm -rf /tmp/cookies.txtInstall Winetricks
+```
+
+### Install Wine
+```shell
+sudo dpkg --add-architecture i386
+sudo apt update -y
+sudo apt install wine64 wine32 -y
+```
+
+### Install Winetricks
+Without this you will get into the game, but your screen will be black.
+```shell
+sudo apt-get install winetricks -y
+winetricks d3dx9
+```
+
+### Extract LoL Client
+```shell
+tar -xzvf league-of-legends-420.tar.gz
+```
+
+### Run Client
+```shell
+pip install pyautogui
+pip install Xlib
+```
+
+### Write config dirs (LoL Client)
+```shell
+touch PATH/TO/config_dirs.txt
+printf "lolclient = /content/League-of-Legends-4-20/RADS/solutions/lol_game_client_sln/releases/0.0.1.68/deploy/" > config_dirs.txt
+```
+
+### Install LolGym
+```shell
+git clone https://github.com/jjlee0802cu/lolgym.git
 pip3 install -e lolgym/
 ```
 
 ## Usage
 
-You need the following minimum code to run any LoLGym environment:
+### PPO Agent trained against hard-coded scripted intermediate bot (Milestone)
+Use commit 0c4958342468c1673e1f86046114b629f0268328
+```shell
+python3 ./lolgym/examples/full_game_ppo.py --epochs 200 --host <public_ip> --config_path "PATH/TO/config_dirs.txt" --run_client
+```
 
-Import gym and this package:
-
-    import gym
-    import lolgym.envs
-
-Import and initialize absl.flags (required due to `pylol` dependency)
-
-    import sys
-    from absl import flags
-    FLAGS = flags.FLAGS
-    FLAGS(sys.argv)
-
-Create and initialize the specific environment.
-
-## Available Environments
-
-### LoL1v1
-
-The full League of Legends v4.20 game environment. Initialize as follows:
-
-    env = gym.make("LoLGame-v0")
-    env.settings["map_name"] = "New Summoners Rift" # Set the map
-    env.settings["human_observer"] = False # Set to true to run league client
-    env.settings["host"] = "localhost" # Set this to a local ip
-    env.settings["players"] = "Nidalee.BLUE,Lucian.PURPLE"
-    
-The `players` setting specifies which champions are in the game and what
-team they are playing on. The `pylol` environment expects them to be in
-a comma-separated list of Champion.TEAM items with that exact capitalization.
-
-Versions:
-- `LoLGame-v0`: The full game with complete access to action and observation
-space.
-
-### LoL1DEscape
-
-Minigame where the controlling agent must maximize it's distance from the other
-agent by moving either left or right. Initialize as follows:
-
-    env = gym.make("LoL1DEscape-v0")
-    env.settings["map_name"] = "New Summoners Rift" # Set the map
-    env.settings["human_observer"] = False # Set to true to run league client
-    env.settings["host"] = "localhost" # Set this to a local ip
-    env.settings["players"] = "Nidalee.BLUE,Lucian.PURPLE"
-
-Versions:
-- `LoL1DEscape-v0`: Highly stripped version of LoL1v1 where the only observation
-is the controlling agents distance from the enemy agent and the only action is to
-move left or right.
-
-#### Notes
-- The action space for this environment doesn't require the call to `functionCall`
-like `pylol` does. You only need to call it with an array of action and arguments.
-For example:
-
-        _SPELL = actions.FUNCTIONS.spell.id
-        _EZREAL_Q = [0]
-        _TARGET = point.Point(8000, 8000)
-        acts = [[_SPELL, _EZREAL_Q, _TARGET] for _ in range(env.n_agents)]
-        obs_n, reward_n, done_n, _ = env.step(acts)
-
-    The environment will not check whether an action is valid before passing it
-    along to the `pysc2` environment so make sure you've checked what actions are
-    available from `obs.observation["available_actions"]`.
-
-- This environment doesn't specify the `observation_space` and `action_space` members
-like traditional `gym` environments. Instead, it provides access to the `observation_spec`
-and `action_spec` objects from the `pylol` environment.
-
-### General Notes
-* Per the Gym environment specifications, the reset function returns an observation,
-and the step function returns a tuple (observation_n, reward_n, done_n, info_n), where
-info_n is a list of empty dictionaries. However, because `lolgym` is a multi-agent environment
-each item is a list of items, i.e. `observation_n` is an observation for each agent, `reward_n`
-is the reward for each agent, `done_n` is whether any of the `observation.step_type` is `LAST`.
-* Aside from `step()` and `reset()`, the environments define a `save_replay()`
-method, that accepts a single parameter `replay_dir`, which is the name of the replay
-directory to save the `GameServer` replays inside of.
-* All the environments have the following additional properties:
-    - `episode`: The current episode number
-    - `num_step`: The total number of steps taken
-    - `episode_reward`: The total reward received for this episode
-    - `total_reward`: The total reward received for all episodes
-* The examples folder contains examples of using the various environments.
+### Two PPO Agents trained against each other using adversarial multi-agent architecture (Final report)
+Use commit 5031243750aaeca52dd4f2d310681a90554cdeda
+```shell
+python3 ./lolgym/examples/full_game_ppo.py --epochs 200 --host <public_ip> --config_path "PATH/TO/config_dirs.txt" --run_client
+```
